@@ -17,7 +17,7 @@
             background: var(--bg);
             color: #e0e0e0;
             padding: 20px;
-            line-height: 1.6;
+            min-height: 100vh;
         }
         .header {
             text-align: center;
@@ -25,13 +25,13 @@
         }
         .header h1 {
             color: var(--accent);
-            font-size: 2.3rem;
+            font-size: 2.4rem;
         }
         .container {
             max-width: 1200px;
             margin: 0 auto;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
             gap: 20px;
         }
         .card {
@@ -39,12 +39,12 @@
             border-radius: 16px;
             padding: 24px;
             border: 1px solid #222;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
         }
         .card h2 {
             color: var(--accent);
             margin-bottom: 20px;
-            font-size: 1.35rem;
+            font-size: 1.4rem;
             display: flex;
             align-items: center;
             gap: 10px;
@@ -67,15 +67,21 @@
             margin-top: 10px;
             font-size: 0.95rem;
         }
-        .status { padding: 6px 12px; border-radius: 20px; font-size: 0.85rem; }
-        .success { background: #00c853; color: #000; }
-        .warning { background: #ff9800; color: #000; text-align: center; padding: 12px; border-radius: 8px; margin: 10px 0; }
+        .warning {
+            background: #ff9800;
+            color: #000;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            margin: 15px 0;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>
     <div class="header">
         <h1><i class="fas fa-info-circle"></i> Device Intelligence</h1>
-        <p>Real-time System & Network Information</p>
+        <p>Real-time System & Network Details</p>
     </div>
 
     <div class="container" id="dashboard"></div>
@@ -83,37 +89,28 @@
     <script>
         async function getIPData() {
             const apis = [
-                "https://ip-api.com/json/?fields=status,message,country,regionName,city,isp,org,timezone,query",
+                "https://ip-api.com/json",
                 "https://ipapi.co/json/",
                 "https://freeipapi.com/json"
             ];
 
-            for (let url of apis) {
+            for (const url of apis) {
                 try {
-                    const res = await fetch(url);
+                    const res = await fetch(url, { cache: "no-store" });
+                    if (!res.ok) continue;
                     const data = await res.json();
 
-                    if (data.query || data.ip || data.city) {
-                        return {
-                            ip: data.query || data.ip || "Detected",
-                            city: data.city || "N/A",
-                            region: data.regionName || data.region || "N/A",
-                            country: data.country || data.country_name || "N/A",
-                            isp: data.isp || data.org || "N/A",
-                            timezone: data.timezone || "N/A"
-                        };
-                    }
+                    return {
+                        ip: data.query || data.ip || "Detected",
+                        city: data.city || "N/A",
+                        region: data.regionName || data.region || "N/A",
+                        country: data.country || data.country_name || "N/A",
+                        isp: data.isp || data.org || "N/A",
+                        timezone: data.timezone || "N/A"
+                    };
                 } catch (e) {}
             }
             return { ip: "Unknown", city: "Unknown", region: "Unknown", country: "Unknown", isp: "Unknown", timezone: "Unknown" };
-        }
-
-        async function getFingerprint() {
-            const raw = [navigator.userAgent, navigator.language, screen.width, screen.height, navigator.platform].join("|");
-            try {
-                const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
-                return [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2, "0")).join("");
-            } catch { return "Unavailable"; }
         }
 
         function getGPUInfo() {
@@ -130,6 +127,22 @@
             }
         }
 
+        async function getFingerprint() {
+            const raw = [
+                navigator.userAgent,
+                navigator.language,
+                screen.width,
+                screen.height,
+                navigator.platform,
+                navigator.hardwareConcurrency || "",
+                navigator.deviceMemory || ""
+            ].join("|");
+            try {
+                const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
+                return [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2, "0")).join("");
+            } catch { return "Unavailable"; }
+        }
+
         async function initDashboard() {
             const ipData = await getIPData();
             const gpu = getGPUInfo();
@@ -143,16 +156,27 @@
                 } catch {}
             }
 
-            const adBlockTest = () => new Promise(r => {
+            const adBlocked = await new Promise(resolve => {
                 const ad = document.createElement("div");
-                ad.className = "adsbox"; ad.style.display = "none";
+                ad.className = "adsbox";
+                ad.style.display = "none";
                 document.body.appendChild(ad);
                 setTimeout(() => {
-                    r(ad.offsetHeight === 0 ? "Yes" : "No");
+                    resolve(ad.offsetHeight === 0 ? "Yes" : "No");
                     ad.remove();
                 }, 100);
             });
-            const adBlocked = await adBlockTest();
+
+            const dashboard = document.getElementById("dashboard");
+            dashboard.innerHTML = "";
+
+            if (ipData.ip === "Unknown") {
+                dashboard.innerHTML += `
+                    <div class="warning">
+                        ⚠️ Could not load location data.<br>
+                        Try refreshing the page or using a different network/browser.
+                    </div>`;
+            }
 
             const sections = [
                 {
@@ -169,9 +193,8 @@
                     title: "🌐 Network",
                     data: {
                         "ISP": ipData.isp,
-                        "Connection": navigator.connection ? 
-                            `\( {navigator.connection.effectiveType} ( \){navigator.connection.downlink || '?'} Mbps)` : "Unknown",
-                        "Status": navigator.onLine ? "✅ Online" : "❌ Offline"
+                        "Connection": navigator.connection ? `\( {navigator.connection.effectiveType} ( \){navigator.connection.downlink || '?'} Mbps)` : "Unknown",
+                        "Online": navigator.onLine ? "✅ Yes" : "❌ No"
                     }
                 },
                 {
@@ -181,14 +204,14 @@
                         "Platform": navigator.platform,
                         "CPU Threads": navigator.hardwareConcurrency || "Unknown",
                         "RAM": navigator.deviceMemory ? navigator.deviceMemory + " GB" : "Unknown",
-                        "Touch": 'ontouchstart' in window ? "Yes" : "No"
+                        "Touch Support": 'ontouchstart' in window ? "Yes" : "No"
                     }
                 },
                 {
                     title: "🖥️ Display & GPU",
                     data: {
                         "Resolution": `${screen.width} × ${screen.height}`,
-                        "Window": `${window.innerWidth} × ${window.innerHeight}`,
+                        "Window Size": `${window.innerWidth} × ${window.innerHeight}`,
                         "Color Depth": screen.colorDepth + " bit",
                         "GPU Renderer": gpu.renderer,
                         "GPU Vendor": gpu.vendor
@@ -201,17 +224,11 @@
                         "Language": navigator.language,
                         "Cookies": navigator.cookieEnabled ? "Enabled" : "Disabled",
                         "Theme": window.matchMedia('(prefers-color-scheme: dark)').matches ? "Dark" : "Light",
-                        "AdBlock": adBlocked
+                        "AdBlock": adBlocked,
+                        "Battery": battery
                     }
                 }
             ];
-
-            const dashboard = document.getElementById("dashboard");
-            dashboard.innerHTML = "";
-
-            if (ipData.ip === "Unknown") {
-                dashboard.innerHTML += `<div class="warning">⚠️ Could not fetch location data. Make sure you are using https:// link (not local file).</div>`;
-            }
 
             sections.forEach(section => {
                 let html = `<div class="card"><h2>${section.title}</h2>`;
@@ -222,7 +239,7 @@
                 dashboard.innerHTML += html;
             });
 
-            // Fingerprint
+            // Fingerprint card
             const fpCard = document.createElement("div");
             fpCard.className = "card";
             fpCard.innerHTML = `<h2>🔑 Browser Fingerprint</h2><div class="fingerprint">${fingerprint}</div>`;
