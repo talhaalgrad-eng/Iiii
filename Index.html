@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>System Information</title>
+    <title>Device Intelligence</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
     <style>
         :root {
@@ -16,8 +16,8 @@
             font-family: 'Segoe UI', system-ui, sans-serif;
             background: var(--bg);
             color: #e0e0e0;
-            line-height: 1.6;
             padding: 20px;
+            line-height: 1.6;
         }
         .header {
             text-align: center;
@@ -25,7 +25,7 @@
         }
         .header h1 {
             color: var(--accent);
-            font-size: 2.2rem;
+            font-size: 2.3rem;
         }
         .container {
             max-width: 1200px;
@@ -39,12 +39,12 @@
             border-radius: 16px;
             padding: 24px;
             border: 1px solid #222;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
         .card h2 {
             color: var(--accent);
-            margin-bottom: 18px;
-            font-size: 1.3rem;
+            margin-bottom: 20px;
+            font-size: 1.35rem;
             display: flex;
             align-items: center;
             gap: 10px;
@@ -57,84 +57,59 @@
         }
         .info-row:last-child { border-bottom: none; }
         .label { color: #888; }
-        .value { 
-            color: #fff; 
-            font-weight: 500; 
-            text-align: right;
-            max-width: 60%;
-        }
+        .value { color: #fff; font-weight: 500; text-align: right; }
         .fingerprint {
             font-family: monospace;
-            word-break: break-all;
             background: #1a1a1a;
             padding: 14px;
             border-radius: 8px;
+            word-break: break-all;
+            margin-top: 10px;
             font-size: 0.95rem;
-            margin-top: 8px;
         }
-        .warning {
-            background: #ff9800;
-            color: black;
-            padding: 10px;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            text-align: center;
-        }
+        .status { padding: 6px 12px; border-radius: 20px; font-size: 0.85rem; }
+        .success { background: #00c853; color: #000; }
+        .warning { background: #ff9800; color: #000; text-align: center; padding: 12px; border-radius: 8px; margin: 10px 0; }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1><i class="fas fa-info-circle"></i> Device & Network Intelligence</h1>
-        <p>Real-time System Information</p>
+        <h1><i class="fas fa-info-circle"></i> Device Intelligence</h1>
+        <p>Real-time System & Network Information</p>
     </div>
 
     <div class="container" id="dashboard"></div>
 
     <script>
         async function getIPData() {
-            // Try ip-api.com first (more reliable)
-            try {
-                const res = await fetch("https://ip-api.com/json/?fields=status,message,country,countryCode,region,regionName,city,isp,org,timezone,query");
-                const data = await res.json();
-                if (data.status === "success") {
-                    return {
-                        ip: data.query,
-                        city: data.city,
-                        region: data.regionName,
-                        country: data.country,
-                        isp: data.isp || data.org,
-                        timezone: data.timezone
-                    };
-                }
-            } catch (e) {}
+            const apis = [
+                "https://ip-api.com/json/?fields=status,message,country,regionName,city,isp,org,timezone,query",
+                "https://ipapi.co/json/",
+                "https://freeipapi.com/json"
+            ];
 
-            // Fallback to ipapi.co
-            try {
-                const res = await fetch("https://ipapi.co/json/");
-                const data = await res.json();
-                return {
-                    ip: data.ip,
-                    city: data.city,
-                    region: data.region,
-                    country: data.country_name,
-                    isp: data.org,
-                    timezone: data.timezone
-                };
-            } catch (e) {}
+            for (let url of apis) {
+                try {
+                    const res = await fetch(url);
+                    const data = await res.json();
 
+                    if (data.query || data.ip || data.city) {
+                        return {
+                            ip: data.query || data.ip || "Detected",
+                            city: data.city || "N/A",
+                            region: data.regionName || data.region || "N/A",
+                            country: data.country || data.country_name || "N/A",
+                            isp: data.isp || data.org || "N/A",
+                            timezone: data.timezone || "N/A"
+                        };
+                    }
+                } catch (e) {}
+            }
             return { ip: "Unknown", city: "Unknown", region: "Unknown", country: "Unknown", isp: "Unknown", timezone: "Unknown" };
         }
 
         async function getFingerprint() {
-            const raw = [
-                navigator.userAgent,
-                navigator.language,
-                screen.width + screen.height,
-                navigator.platform,
-                navigator.hardwareConcurrency || "",
-                navigator.deviceMemory || ""
-            ].join("|");
-            
+            const raw = [navigator.userAgent, navigator.language, screen.width, screen.height, navigator.platform].join("|");
             try {
                 const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
                 return [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2, "0")).join("");
@@ -168,53 +143,52 @@
                 } catch {}
             }
 
-            const adBlockTest = () => new Promise(resolve => {
+            const adBlockTest = () => new Promise(r => {
                 const ad = document.createElement("div");
-                ad.className = "adsbox";
-                ad.style.display = "none";
+                ad.className = "adsbox"; ad.style.display = "none";
                 document.body.appendChild(ad);
                 setTimeout(() => {
-                    resolve(ad.offsetHeight === 0 ? "Yes" : "No");
+                    r(ad.offsetHeight === 0 ? "Yes" : "No");
                     ad.remove();
-                }, 120);
+                }, 100);
             });
-
             const adBlocked = await adBlockTest();
 
             const sections = [
                 {
                     title: "📍 Location",
                     data: {
-                        "IP Address": ipData.ip || "Unknown",
-                        "City": ipData.city || "Unknown",
-                        "Region": ipData.region || "Unknown",
-                        "Country": ipData.country || "Unknown",
-                        "Timezone": ipData.timezone || "Unknown"
+                        "IP Address": ipData.ip,
+                        "City": ipData.city,
+                        "Region": ipData.region,
+                        "Country": ipData.country,
+                        "Timezone": ipData.timezone
                     }
                 },
                 {
                     title: "🌐 Network",
                     data: {
-                        "ISP / Organization": ipData.isp || "Unknown",
-                        "Connection": navigator.connection ? `\( {navigator.connection.effectiveType} ( \){navigator.connection.downlink} Mbps)` : "Unknown",
-                        "Online": navigator.onLine ? "✅ Yes" : "❌ No"
+                        "ISP": ipData.isp,
+                        "Connection": navigator.connection ? 
+                            `\( {navigator.connection.effectiveType} ( \){navigator.connection.downlink || '?'} Mbps)` : "Unknown",
+                        "Status": navigator.onLine ? "✅ Online" : "❌ Offline"
                     }
                 },
                 {
                     title: "💻 System",
                     data: {
-                        "Device": /Mobi|Android/i.test(navigator.userAgent) ? "Mobile" : "Desktop / Laptop",
+                        "Device": /Mobi|Android/i.test(navigator.userAgent) ? "Mobile" : "Desktop/Laptop",
                         "Platform": navigator.platform,
                         "CPU Threads": navigator.hardwareConcurrency || "Unknown",
                         "RAM": navigator.deviceMemory ? navigator.deviceMemory + " GB" : "Unknown",
-                        "Touch": 'ontouchstart' in window ? "Supported" : "Not Supported"
+                        "Touch": 'ontouchstart' in window ? "Yes" : "No"
                     }
                 },
                 {
                     title: "🖥️ Display & GPU",
                     data: {
-                        "Screen Resolution": `${screen.width} × ${screen.height}`,
-                        "Window Size": `${window.innerWidth} × ${window.innerHeight}`,
+                        "Resolution": `${screen.width} × ${screen.height}`,
+                        "Window": `${window.innerWidth} × ${window.innerHeight}`,
                         "Color Depth": screen.colorDepth + " bit",
                         "GPU Renderer": gpu.renderer,
                         "GPU Vendor": gpu.vendor
@@ -223,10 +197,11 @@
                 {
                     title: "🌐 Browser",
                     data: {
-                        "Browser": navigator.userAgent.includes("Chrome") ? "Chrome" : navigator.userAgent.includes("Firefox") ? "Firefox" : "Other",
+                        "Browser": getBrowser(),
                         "Language": navigator.language,
                         "Cookies": navigator.cookieEnabled ? "Enabled" : "Disabled",
-                        "Theme": window.matchMedia('(prefers-color-scheme: dark)').matches ? "Dark" : "Light"
+                        "Theme": window.matchMedia('(prefers-color-scheme: dark)').matches ? "Dark" : "Light",
+                        "AdBlock": adBlocked
                     }
                 }
             ];
@@ -234,27 +209,33 @@
             const dashboard = document.getElementById("dashboard");
             dashboard.innerHTML = "";
 
+            if (ipData.ip === "Unknown") {
+                dashboard.innerHTML += `<div class="warning">⚠️ Could not fetch location data. Make sure you are using https:// link (not local file).</div>`;
+            }
+
             sections.forEach(section => {
                 let html = `<div class="card"><h2>${section.title}</h2>`;
                 Object.entries(section.data).forEach(([key, value]) => {
-                    html += `
-                        <div class="info-row">
-                            <span class="label">${key}</span>
-                            <span class="value">${value}</span>
-                        </div>`;
+                    html += `<div class="info-row"><span class="label">\( {key}</span><span class="value"> \){value}</span></div>`;
                 });
                 html += `</div>`;
                 dashboard.innerHTML += html;
             });
 
-            // Fingerprint Card
+            // Fingerprint
             const fpCard = document.createElement("div");
             fpCard.className = "card";
-            fpCard.innerHTML = `
-                <h2>🔑 Browser Fingerprint</h2>
-                <div class="fingerprint">${fingerprint}</div>
-            `;
+            fpCard.innerHTML = `<h2>🔑 Browser Fingerprint</h2><div class="fingerprint">${fingerprint}</div>`;
             dashboard.appendChild(fpCard);
+        }
+
+        function getBrowser() {
+            const ua = navigator.userAgent;
+            if (ua.includes("Firefox")) return "Firefox";
+            if (ua.includes("Edg")) return "Edge";
+            if (ua.includes("Chrome")) return "Chrome";
+            if (ua.includes("Safari")) return "Safari";
+            return "Other";
         }
 
         window.onload = initDashboard;
